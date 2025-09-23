@@ -3,7 +3,7 @@ name: gds
 on:
   push:
     branches:
-      - "*"
+      - counter
   workflow_dispatch:
 
 jobs:
