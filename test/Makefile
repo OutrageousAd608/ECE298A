@@ -8,7 +8,7 @@ TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
 
 # Your Verilog source file(s)
-PROJECT_SOURCES = counter.v
+PROJECT_SOURCES = project.v
 
 # RTL simulation build directory
 SIM_BUILD = sim_build/rtl
