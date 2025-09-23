@@ -2,18 +2,15 @@ name: gds
 
 on:
   push:
-    branches:
-      - counter
   workflow_dispatch:
 
 jobs:
   gds:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repo
+      - name: checkout repo
         uses: actions/checkout@v4
         with:
-          ref: counter
           submodules: recursive
 
       - name: Build GDS
@@ -36,10 +33,9 @@ jobs:
     needs: gds
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repo
+      - name: checkout repo
         uses: actions/checkout@v4
         with:
-          ref: counter
           submodules: recursive
 
       - name: GL test

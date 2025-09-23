@@ -8,7 +8,7 @@ TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
 
 # Your Verilog source file(s)
-PROJECT_SOURCES = project.v
+PROJECT_SOURCES = counter.v
 
 # RTL simulation build directory
 SIM_BUILD = sim_build/rtl
@@ -16,7 +16,7 @@ SIM_BUILD = sim_build/rtl
 # Verilog sources (your design)
 VERILOG_SOURCES = $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
 
-# Top-level module (must match the module name in project.v)
+# Top-level module (must match the module name in counter.v)
 TOPLEVEL = tt_um_counter
 
 # Python testbench module (test/test_counter.py)
