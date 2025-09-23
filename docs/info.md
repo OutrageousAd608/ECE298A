@@ -7,9 +7,10 @@ You can also include images in this folder and reference them in the markdown. E
 512 kb in size, and the combined size of all images must be less than 1 MB.
 -->
 
-## How it works
+# How it works
 
-Explain how your project works
+This is a practice project that has 8 inputs, 8 outputs, and 8 bidirectional pins. 
+It doesn’t perform any specific logic; it is primarily used for testing pin connections and basic functionality in the Tiny Tapeout flow.
 
 ## How to test
 

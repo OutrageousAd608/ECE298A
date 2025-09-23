@@ -6,7 +6,6 @@ project:
   description:  "8i8o8io"      # One line description of what your project does
   language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
   clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
-  how_it_works: "This is a practice project that has 8 inputs, 8 outputs, and 8 bidirectional pins." # A short description of how your project works (optional)
 
   # How many tiles your design occupies? A single tile is about 167x108 uM.
   tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
