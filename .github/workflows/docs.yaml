@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: counter
           submodules: recursive
 
       - name: Build docs
