@@ -9,11 +9,11 @@ def ns_int(value):
 
 async def init_dut(dut):
     """Common initialization for all tests."""
-    dut.reset_n.value = 0
+    dut.rst_n.value = 0
     dut.ref_in.value = 0
     dut.ena.value = 1  # drive enable high
     await Timer(200, "ns")
-    dut.reset_n.value = 1
+    dut.rst_n.value = 1
     await Timer(200, "ns")
 
 async def start_clock(dut, clk_hz=20e6):
@@ -140,9 +140,9 @@ async def test_relock_after_disturbance(dut):
     await Timer(int(5e6), "ns")
 
     # Introduce phase disturbance
-    dut.reset_n.value = 0
+    dut.rst_n.value = 0
     await Timer(100, "ns")
-    dut.reset_n.value = 1
+    dut.rst_n.value = 1
     await Timer(int(2e6), "ns")
 
     assert int(dut.locked.value) == 1, "ADPLL failed to relock after disturbance"
