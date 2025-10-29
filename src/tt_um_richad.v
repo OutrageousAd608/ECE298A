@@ -1,11 +1,13 @@
 `timescale 1ns/1ps
 module tt_um_richad (
-    input  wire clk,      // TT system clock
-    input  wire ena,      // TT global enable
-    input  wire rst_n,    // TT asynchronous active-low reset
-    input  wire ref_in,   // PLL reference input
-    output wire dco_out,  // DCO output
-    output wire locked    // Lock indicator
+    input  wire clk,        // TT system clock
+    input  wire ena,        // TT global enable
+    input  wire rst_n,      // TT asynchronous active-low reset
+    input  wire ref_in,     // PLL reference input
+    input  wire [3:0] ui_in, // TinyTapeout user input pins
+    output wire dco_out,    // DCO output
+    output wire locked,     // Lock indicator
+    output wire [3:0] ui_out // TinyTapeout user output pins
 );
 
 parameter PHASE_BITS = 16;
@@ -59,5 +61,6 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 assign locked = lock_reg;
+assign ui_out = 4'b0000; // tie unused TT pins to 0
 
 endmodule
