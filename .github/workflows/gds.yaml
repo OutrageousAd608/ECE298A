@@ -34,20 +34,27 @@ jobs:
           tools-ref: ttsky25a
 
   gl_test:
-    needs: gds
-    runs-on: ubuntu-24.04
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-    steps:
-      - name: checkout repo
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+  needs: gds
+  runs-on: ubuntu-24.04
+  env:
+    GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+  steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-      - name: GL test
-        uses: TinyTapeout/tt-gds-action/gl_test@ttsky25a
-        with:
-          pdk: sky130
+    - name: Install Icarus Verilog 12.0
+      run: |
+        sudo apt remove -y iverilog
+        sudo apt update
+        sudo apt install -y iverilog=12.0-1build1
+
+    - name: GL test
+      uses: TinyTapeout/tt-gds-action/gl_test@ttsky25a
+      with:
+        pdk: sky130
+
 
   viewer:
     needs: gds
