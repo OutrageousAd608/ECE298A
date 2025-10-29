@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 module tt_um_richad (
-    input  wire sys_clk,
+    input  wire clk,       // must be 'clk' for TinyTapeout
     input  wire reset_n,
     input  wire ref_in,
     output wire dco_out,
@@ -15,31 +15,35 @@ wire signed [31:0] pd_val;
 wire [CTRL_BITS-1:0] dco_ctrl;
 wire [31:0] lf_out;
 
+// Phase detector
 phase_detector #(.OUT_WIDTH(32)) pd (
-    .clk(sys_clk),
+    .clk(clk),
     .reset_n(reset_n),
     .ref_in(ref_in),
     .dco_in(dco_out),
     .phase_err(pd_val)
 );
 
+// Loop filter
 loop_filter #(.IN_WIDTH(32), .OUT_WIDTH(32), .K_P(8)) lf (
-    .clk(sys_clk),
+    .clk(clk),
     .reset_n(reset_n),
     .phase_in(pd_val),
     .control_out(lf_out)
 );
 
+// Digitally controlled oscillator
 dco #(.CTRL_BITS(CTRL_BITS), .PHASE_BITS(PHASE_BITS)) my_dco (
-    .clk(sys_clk),
+    .clk(clk),
     .reset_n(reset_n),
     .ctrl_word(lf_out[CTRL_BITS-1:0]),
     .dco_out(dco_out)
 );
 
+// Consecutive lock detector
 reg [$clog2(LOCK_THRESH+1)-1:0] lock_cnt;
 reg lock_reg;
-always @(posedge sys_clk or negedge reset_n) begin
+always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         lock_cnt <= 0;
         lock_reg <= 1'b0;
