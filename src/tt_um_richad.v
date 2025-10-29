@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module adpll_top (
+module tt_um_richad (
     input  wire sys_clk,
     input  wire reset_n,
     input  wire ref_in,
