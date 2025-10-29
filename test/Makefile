@@ -10,12 +10,10 @@ SRC_DIR = $(PWD)/../src
 # UPDATED: List all Verilog source files for the ADPLL
 # ---------------------------------------------------------------------
 PROJECT_SOURCES = \
-	tt_um_user_module.v \
 	adpll_top.v \
-	pfd_module.v \
-	dlf_module.v \
-	dco_module.v \
-	n_divider_module.v
+	dco.v \
+	loop_filter.v \
+	phase_detector.v
 
 ifneq ($(GATES),yes)
 
@@ -47,7 +45,7 @@ COMPILE_ARGS        += -I$(SRC_DIR)
 # UPDATED: Set the TOPLEVEL to your TinyTapeout wrapper
 # ---------------------------------------------------------------------
 # Remove VERILOG_SOURCES += $(PWD)/tb.v
-TOPLEVEL = tt_um_user_module
+TOPLEVEL = adpll_top
 
 # MODULE is the basename of the Python test file
 MODULE = test

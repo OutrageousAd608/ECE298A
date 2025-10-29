@@ -1,55 +1,57 @@
-// File: adpll_top.v
+`timescale 1ns/1ps
 module adpll_top (
-    input  wire       clk_ref,     // Reference clock from ui_in[0]
-    input  wire       clk_sys,     // System clock for DCO (or clk_ref if fast enough)
-    input  wire       rst_n,       // Active-low reset
-    input  wire [3:0] div_ratio_in, // Programmable division ratio N
-    output wire       locked,      // PLL lock indicator
-    output wire       clk_out,     // Synchronized/multiplied clock output (DCO output)
-    output wire [7:0] debug_out    // Internal debug signals
+    input  wire sys_clk,
+    input  wire reset_n,
+    input  wire ref_in,
+    output wire dco_out,
+    output wire locked
 );
 
-    // Internal wires
-    wire up, dn;             // PFD outputs
-    wire clk_div;            // Divided clock from N-Divider
-    wire [7:0] dco_code;     // Control code for DCO (Loop Filter output)
-    
-    // --- 1. PFD Instantiation ---
-    pfd_module pfd_inst (
-        .clk_ref   (clk_ref),
-        .clk_div   (clk_div),
-        .up        (up),
-        .dn        (dn)
-    );
+parameter PHASE_BITS = 16;
+parameter CTRL_BITS  = 10;
+parameter LOCK_THRESH = 20;
 
-    // --- 2. Digital Loop Filter (Accumulator) Instantiation ---
-    // CRITICAL FIX: Swap UP/DN ports to correct PLL feedback polarity
-    dlf_module dlf_inst (
-        .clk_ref   (clk_ref),
-        .rst_n     (rst_n),
-        .up        (dn), // <-- SWAPPED: DLF UP is now PFD DN
-        .dn        (up), // <-- SWAPPED: DLF DN is now PFD UP
-        .dco_code  (dco_code)
-    );
+wire signed [31:0] pd_val;
+wire [CTRL_BITS-1:0] dco_ctrl;
+wire [31:0] lf_out;
 
-    // --- 3. DCO Instantiation ---
-    dco_module dco_inst (
-        .clk_sys   (clk_sys),   // DCO runs on the fast system clock
-        .rst_n     (rst_n),
-        .dco_code  (dco_code),
-        .clk_out   (clk_out)
-    );
+phase_detector #(.OUT_WIDTH(32)) pd (
+    .clk(sys_clk),
+    .reset_n(reset_n),
+    .ref_in(ref_in),
+    .dco_in(dco_out),
+    .phase_err(pd_val)
+);
 
-    // --- 4. N-Divider Instantiation ---
-    n_divider_module n_div_inst (
-        .clk_in    (clk_out),
-        .rst_n     (rst_n),
-        .div_ratio (div_ratio_in),
-        .clk_out   (clk_div)
-    );
+loop_filter #(.IN_WIDTH(32), .OUT_WIDTH(32), .K_P(8)) lf (
+    .clk(sys_clk),
+    .reset_n(reset_n),
+    .phase_in(pd_val),
+    .control_out(lf_out)
+);
 
-    // --- Output Assignments ---\
-    assign locked    = ~up & ~dn; // Simple assumption for lock signal
-    assign debug_out = dco_code;
+dco #(.CTRL_BITS(CTRL_BITS), .PHASE_BITS(PHASE_BITS)) my_dco (
+    .clk(sys_clk),
+    .reset_n(reset_n),
+    .ctrl_word(lf_out[CTRL_BITS-1:0]),
+    .dco_out(dco_out)
+);
+
+reg [$clog2(LOCK_THRESH+1)-1:0] lock_cnt;
+reg lock_reg;
+always @(posedge sys_clk or negedge reset_n) begin
+    if (!reset_n) begin
+        lock_cnt <= 0;
+        lock_reg <= 1'b0;
+    end else begin
+        if ($signed(pd_val) < 32'sd16 && $signed(pd_val) > -32'sd16) begin
+            if (lock_cnt < LOCK_THRESH) lock_cnt <= lock_cnt + 1;
+        end else begin
+            lock_cnt <= 0;
+        end
+        lock_reg <= (lock_cnt >= (LOCK_THRESH-1));
+    end
+end
+assign locked = lock_reg;
 
 endmodule
