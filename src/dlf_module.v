@@ -7,7 +7,7 @@ module dlf_module (
     output reg  [7:0] dco_code // Output DCO control code (8 bits)
 );
 
-    parameter INITIAL_CODE = 8'd128; // Center frequency code
+    parameter INITIAL_CODE = 8'd128; // Center frequency code (Change from 8'd0)
 
     always @(posedge clk_ref or negedge rst_n) begin
         if (!rst_n) begin
@@ -18,8 +18,6 @@ module dlf_module (
                 dco_code <= dco_code + 1;
             else if (dn & ~up)
                 dco_code <= dco_code - 1;
-            // No change if both UP and DN are high (shouldn't happen with PFD above)
-            // or if both are low (phase locked or no error)
         end
     end
 

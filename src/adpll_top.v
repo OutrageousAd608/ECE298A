@@ -1,4 +1,4 @@
-// File: adpll_top.v (CORRECTED)
+// File: adpll_top.v
 module adpll_top (
     input  wire       clk_ref,     // Reference clock from ui_in[0]
     input  wire       clk_sys,     // System clock for DCO (or clk_ref if fast enough)
@@ -23,11 +23,12 @@ module adpll_top (
     );
 
     // --- 2. Digital Loop Filter (Accumulator) Instantiation ---
+    // CRITICAL FIX: Swap UP/DN ports to correct PLL feedback polarity
     dlf_module dlf_inst (
-        .clk_ref   (clk_ref), // <--- CORRECTED: Port name must be .clk_ref
+        .clk_ref   (clk_ref),
         .rst_n     (rst_n),
-        .up        (up),
-        .dn        (dn),
+        .up        (dn), // <-- SWAPPED: DLF UP is now PFD DN
+        .dn        (up), // <-- SWAPPED: DLF DN is now PFD UP
         .dco_code  (dco_code)
     );
 
@@ -47,11 +48,8 @@ module adpll_top (
         .clk_out   (clk_div)
     );
 
-    // --- Lock Detection (Simple) ---
-    // (Existing logic remains)
-    assign locked = (dco_code > 8'd0); 
-
-    // Debugging outputs: DCO code and PFD status
-    assign debug_out = {dco_code[5:0], up, dn}; 
+    // --- Output Assignments ---\
+    assign locked    = ~up & ~dn; // Simple assumption for lock signal
+    assign debug_out = dco_code;
 
 endmodule
