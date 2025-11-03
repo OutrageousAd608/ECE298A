@@ -100,7 +100,7 @@ async def test_startup_behavior(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(100, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
     await Timer(int(5e6), "ns")
 
@@ -114,7 +114,7 @@ async def test_phase_detector_saturation(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(100, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
 
     # Apply a large phase error by toggling ref slowly
@@ -139,7 +139,7 @@ async def test_relock_after_disturbance(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(100, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
 
     # Wait for lock
