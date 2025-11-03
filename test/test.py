@@ -15,9 +15,9 @@ async def test_locking_basic(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
 
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
@@ -42,9 +42,9 @@ async def test_lock_with_jitter(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
 
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
@@ -72,9 +72,9 @@ async def test_frequency_tracking(dut):
 
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
     dut.rst_n.value = 1
-    await Timer(200, "ns")
+    await Timer(1000, "ns")
 
     async def drive_ref_steps(freqs_hz):
         for f in freqs_hz:
