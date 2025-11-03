@@ -48,6 +48,7 @@ jobs:
         uses: TinyTapeout/tt-gds-action/gl_test@ttsky25a
         with:
           pdk: sky130
+          extra_make_args: COCOTB_RESOLVE_X=ZEROS
 
   viewer:
     needs: gds
