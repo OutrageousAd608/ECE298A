@@ -27,7 +27,7 @@ jobs:
         run: |
           cd test
           make clean
-          make GATES=yes COCOTB_RESOLVE_X=ZEROS
+          make
           # make will return success even if the test fails, so check for failure in the results.xml
           ! grep failure results.xml
 
