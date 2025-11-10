@@ -6,6 +6,8 @@ SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
 
+WAVES = 1
+
 # ---------------------------------------------------------------------
 # UPDATED: List all Verilog source files for the ADPLL
 # ---------------------------------------------------------------------
