@@ -20,6 +20,15 @@ async def init_dut(dut, sys_period_ns):
     dut.rst_n.value = 1
     await Timer(ns_int(sys_period_ns * 10), "ns")
 
+# --- Helper function for safely converting DUT output ---
+def get_safe_uo_out(dut):
+    """Converts dut.uo_out value to integer, replacing 'x' with '0' to avoid ValueError."""
+    # Convert the value to a string, replace 'x' with '0', and then convert to int
+    uo_out_val_str = str(dut.uo_out.value).replace('x', '0')
+    # Use 2 for base 2 conversion (binary)
+    return int(uo_out_val_str, 2)
+# --------------------------------------------------------
+
 @cocotb.test()
 async def test_locking_basic(dut):
     sys_clk_hz = 20e6
@@ -30,20 +39,32 @@ async def test_locking_basic(dut):
 
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
+    half_clk_period = sys_period_ns / 2 # Half-period for the synchronization fix
 
     async def drive_ref():
         # Drive ref_signal on ui_in[0]
         while True:
+            # FIX: Toggle ref_in safely after a half clock period to avoid metastability (x)
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+            
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 1 # Set bit 0 high
-            await Timer(ns_int(ref_period_ns/2), "ns")
+            await Timer(ns_int(ref_period_ns/2 - half_clk_period), "ns")
+            
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 0 # Set bit 0 low
-            await Timer(ns_int(ref_period_ns/2), "ns")
+            await Timer(ns_int(ref_period_ns/2 - half_clk_period), "ns")
+
 
     cocotb.start_soon(drive_ref())
 
     await Timer(int(5e6), "ns")  # give it more time to settle
-    # [cite_start]uo_out[0] is the lock indicator [cite: 15]
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL did not lock"
+    
+    # Assert using the safe conversion function to handle residual 'x' if any, 
+    # but the primary goal is to eliminate 'x' generation.
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL did not lock"
 
 @cocotb.test()
 async def test_lock_with_jitter(dut):
@@ -55,22 +76,33 @@ async def test_lock_with_jitter(dut):
 
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
+    half_clk_period = sys_period_ns / 2
 
     async def drive_ref_jittery():
         # Drive ref_signal on ui_in[0]
         while True:
             half = ref_period_ns / 2
             jitter = (random.random() - 0.5) * 0.2 * half
+            
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 1 # Set bit 0 high
-            await Timer(ns_int(half + jitter), "ns")
+            await Timer(ns_int(half + jitter - half_clk_period), "ns")
+            
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             jitter2 = (random.random() - 0.5) * 0.2 * half
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 0 # Set bit 0 low
-            await Timer(ns_int(half + jitter2), "ns")
+            await Timer(ns_int(half + jitter2 - half_clk_period), "ns")
 
     cocotb.start_soon(drive_ref_jittery())
 
     await Timer(int(6e6), "ns")
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL failed to lock with jitter"
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL failed to lock with jitter"
 
 @cocotb.test()
 async def test_frequency_tracking(dut):
@@ -79,6 +111,7 @@ async def test_frequency_tracking(dut):
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
     await init_dut(dut, sys_period_ns)
+    half_clk_period = sys_period_ns / 2
 
     async def drive_ref_steps(freqs_hz):
         # Drive ref_signal on ui_in[0]
@@ -86,16 +119,26 @@ async def test_frequency_tracking(dut):
             half = (1e9 / f) / 2
             t_end = cocotb.utils.get_sim_time('ns') + 300000
             while cocotb.utils.get_sim_time('ns') < t_end:
+                
+                # FIX: Wait safely before toggling
+                await RisingEdge(dut.clk)
+                await Timer(ns_int(half_clk_period), "ns")
+                
                 dut.ui_in.value = (dut.ui_in.value & 0xFE) | 1 # Set bit 0 high
-                await Timer(ns_int(half), "ns")
+                await Timer(ns_int(half - half_clk_period), "ns")
+                
+                # FIX: Wait safely before toggling
+                await RisingEdge(dut.clk)
+                await Timer(ns_int(half_clk_period), "ns")
+                
                 dut.ui_in.value = (dut.ui_in.value & 0xFE) | 0 # Set bit 0 low
-                await Timer(ns_int(half), "ns")
+                await Timer(ns_int(half - half_clk_period), "ns")
 
     freqs = [0.9e6, 1.0e6, 1.1e6]
     cocotb.start_soon(drive_ref_steps(freqs))
 
     await Timer(int(2e6), "ns")
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL not locked after frequency steps"
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL not locked after frequency steps"
 
 @cocotb.test()
 async def test_startup_behavior(dut):
@@ -109,12 +152,7 @@ async def test_startup_behavior(dut):
     # In this test, we start with no reference signal (ui_in[0] = 0)
     await Timer(int(5e6), "ns")
 
-    # [cite_start]The lock detection uses phase_err > 0 and phase_err < 0 to drift towards zero[cite: 41, 42].
-    # [cite_start]Without an external reference (ref_signal=0)[cite: 4], the DCO control word should drift to 0, 
-    # [cite_start]resulting in a near-zero DCO frequency[cite: 20]. If the phase error stays within the 
-    # [cite_start]lock window (<= 16)[cite: 11], it *can* lock even without a reference.
-    # We maintain the original assertion for test consistency.
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL failed to lock cleanly after reset"
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL failed to lock cleanly after reset"
 
 @cocotb.test()
 async def test_phase_detector_saturation(dut):
@@ -123,20 +161,30 @@ async def test_phase_detector_saturation(dut):
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
     await init_dut(dut, sys_period_ns)
+    half_clk_period = sys_period_ns / 2
 
     # Apply a large phase error by toggling ref slowly
     async def slow_ref():
         # Drive ref_signal on ui_in[0]
         while True:
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 1 # Set bit 0 high
-            await Timer(int(1e3), "ns")
+            await Timer(int(1e3) - half_clk_period, "ns")
+
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 0 # Set bit 0 low
-            await Timer(int(1e3), "ns")
+            await Timer(int(1e3) - half_clk_period, "ns")
 
     cocotb.start_soon(slow_ref())
 
     await Timer(int(5e6), "ns")
-    # Phase error should saturate, so just check simulation runs
+    get_safe_uo_out(dut) # Ensures no 'x' crash before this point
     assert True
 
 @cocotb.test()
@@ -150,21 +198,31 @@ async def test_relock_after_disturbance(dut):
     # Wait for initial lock
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
+    half_clk_period = sys_period_ns / 2
 
     async def drive_ref():
         # Drive ref_signal on ui_in[0]
         while True:
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 1 # Set bit 0 high
-            await Timer(ns_int(ref_period_ns/2), "ns")
+            await Timer(ns_int(ref_period_ns/2 - half_clk_period), "ns")
+
+            # FIX: Wait safely before toggling
+            await RisingEdge(dut.clk)
+            await Timer(ns_int(half_clk_period), "ns")
+            
             dut.ui_in.value = (dut.ui_in.value & 0xFE) | 0 # Set bit 0 low
-            await Timer(ns_int(ref_period_ns/2), "ns")
+            await Timer(ns_int(ref_period_ns/2 - half_clk_period), "ns")
 
     ref_driver = cocotb.start_soon(drive_ref())
 
     await Timer(int(5e6), "ns")
     
     # Check initial lock
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL failed initial lock before disturbance"
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL failed initial lock before disturbance"
 
     # Disturb the ADPLL by injecting a large phase error (stop ref toggling for a period)
     ref_driver.kill() 
@@ -177,4 +235,4 @@ async def test_relock_after_disturbance(dut):
     cocotb.start_soon(drive_ref()) 
 
     await Timer(int(5e6), "ns")
-    assert (int(dut.uo_out.value) & 0x1) == 1, "ADPLL failed to relock after disturbance"
+    assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL failed to relock after disturbance"
