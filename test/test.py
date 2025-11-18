@@ -31,7 +31,8 @@ def get_safe_uo_out(dut):
 
 @cocotb.test()
 async def test_locking_basic(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
@@ -39,7 +40,7 @@ async def test_locking_basic(dut):
 
     ref_freq_hz = 1e6
     ref_period_ns = 1e9 / ref_freq_hz
-    half_clk_period = sys_period_ns / 2 # Half-period for the synchronization fix
+    half_clk_period = sys_period_ns / 2 
 
     async def drive_ref():
         # Drive ref_signal on ui_in[0]
@@ -62,13 +63,12 @@ async def test_locking_basic(dut):
 
     await Timer(int(5e6), "ns")  # give it more time to settle
     
-    # Assert using the safe conversion function to handle residual 'x' if any, 
-    # but the primary goal is to eliminate 'x' generation.
     assert (get_safe_uo_out(dut) & 0x1) == 1, "ADPLL did not lock"
 
 @cocotb.test()
 async def test_lock_with_jitter(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
@@ -106,7 +106,8 @@ async def test_lock_with_jitter(dut):
 
 @cocotb.test()
 async def test_frequency_tracking(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
@@ -142,7 +143,8 @@ async def test_frequency_tracking(dut):
 
 @cocotb.test()
 async def test_startup_behavior(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
@@ -156,7 +158,8 @@ async def test_startup_behavior(dut):
 
 @cocotb.test()
 async def test_phase_detector_saturation(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 
@@ -189,7 +192,8 @@ async def test_phase_detector_saturation(dut):
 
 @cocotb.test()
 async def test_relock_after_disturbance(dut):
-    sys_clk_hz = 20e6
+    # FIX: Set system clock frequency to 50 MHz (20ns period)
+    sys_clk_hz = 50e6 
     sys_period_ns = 1e9 / sys_clk_hz
     cocotb.start_soon(Clock(dut.clk, sys_period_ns, "ns").start())
 

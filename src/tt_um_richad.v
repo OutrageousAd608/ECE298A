@@ -42,8 +42,7 @@ module tt_um_richad (
         .control_out(lf_out)
     );
 
-    // FIX: PHASE_BITS must match dco.v
-    dco #(.CTRL_BITS(10), .PHASE_BITS(14)) my_dco (
+    dco #(.CTRL_BITS(10), .PHASE_BITS(15)) my_dco ( // FIX: PHASE_BITS set to 15
         .clk(clk),
         .reset_n(rst_n),
         .ctrl_word(lf_out[9:0]),
@@ -57,7 +56,6 @@ module tt_um_richad (
     reg [$clog2(LOCK_THRESH+1)-1:0] lock_cnt;
     reg lock_reg;
     
-    // FIX: Widen the lock detection window from 16 to 256 for stability
     parameter LOCK_WINDOW = 32'sd256; 
 
     always @(posedge clk or negedge rst_n) begin

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module dco #(
     parameter CTRL_BITS = 10,
-    parameter PHASE_BITS = 14 // FIX: Changed from 16 to 14 to increase max frequency (Fmax ≈ 1.2 MHz)
+    parameter PHASE_BITS = 15 // FIX: Changed from 14/16 to 15 for 50 MHz operation
 ) (
     input  wire clk,
     input  wire reset_n,
