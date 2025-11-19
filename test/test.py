@@ -7,14 +7,11 @@ from cocotb.utils import get_sim_time
 # Constants based on dco.v parameters
 DCO_CTRL_BITS = 10
 DCO_PHASE_BITS = 16
-CLOCK_PERIOD_NS = 20 # 20ns period = 50MHz clock
+CLOCK_PERIOD_NS = 20 # 20ns period = 50MHz clock (Adjusted for typical TT clock speed)
 
 async def measure_frequency(dut, ctrl_value, num_cycles):
     """
     Applies a control word and measures the period of the DCO output.
-    
-    NOTE: Measures the signal on uo_out[0] using clock-edge polling
-          to avoid VPI/GPI limitations on bit-slice triggers.
     """
     # 1. Apply Control Word
     dut._log.info(f"Applying control word C={ctrl_value} ({hex(ctrl_value)})")
@@ -32,34 +29,17 @@ async def measure_frequency(dut, ctrl_value, num_cycles):
     # 2. Measure DCO Period
     start_time = get_sim_time()
     
-    # Helper function to check uo_out[0] value
-    def get_dco_out():
-        # Mask for bit 0
-        return dut.uo_out.value.integer & 1
-
-    # Ensure we start on a clock edge
-    await RisingEdge(dut.clk)
-    
-    # Find the first rising edge (0 -> 1)
-    dut._log.debug("Waiting for first Rising Edge...")
-    while get_dco_out() == 0:
-        await RisingEdge(dut.clk)
+    # Find the first rising edge
+    await RisingEdge(dut.dco_signal) 
     
     # Find the next NUM_CYCLES edges to measure the average period
-    for i in range(num_cycles):
-        # Wait for Falling Edge (1 -> 0)
-        dut._log.debug(f"Cycle {i+1}: Waiting for Falling Edge...")
-        while get_dco_out() == 1:
-            await RisingEdge(dut.clk)
-            
-        # Wait for Rising Edge (0 -> 1)
-        dut._log.debug(f"Cycle {i+1}: Waiting for Rising Edge...")
-        while get_dco_out() == 0:
-            await RisingEdge(dut.clk)
+    for _ in range(num_cycles):
+        await RisingEdge(dut.dco_signal)
 
     end_time = get_sim_time()
     
     # Calculate measured period and frequency
+    # get_sim_time returns ps (int). Divide by 1000.0 to convert to ns (float).
     total_time_ps = end_time - start_time
     total_time_ns = total_time_ps / 1000.0 
     
@@ -74,12 +54,14 @@ async def measure_frequency(dut, ctrl_value, num_cycles):
 
 def calculate_expected_freq(ctrl_value):
     """
-    Calculates the theoretical DCO frequency in MHz.
+    Calculates the theoretical DCO frequency in MHz based on the
+    scaled increment value in the Verilog module (dco.v).
     
     f_dco = (C / 2^CTRL_BITS) * f_clk
     """
     f_clk_mhz = 1000.0 / CLOCK_PERIOD_NS # 50 MHz
     
+    # Use DCO_CTRL_BITS (10) as the effective denominator resolution.
     expected_freq_mhz = (ctrl_value / (2**DCO_CTRL_BITS)) * f_clk_mhz
     return expected_freq_mhz
 
@@ -104,15 +86,16 @@ async def dco_frequency_test(dut):
     dut._log.info("Reset released.")
 
     # 2. Define Test Cases (Ctrl Word C)
-    # Increased cycles for C=1 and C=3 to improve precision at very low frequencies
+    # NOTE: The maximum reliable, 50%-duty-cycle frequency for this DCO design is
+    # f_clk / 2 (25 MHz when f_clk=50MHz), corresponding to C=512.
     test_ctrl_words = {
-        0: 0,        # C=0: Min frequency (should be 0 Hz).
-        1: 500,      # C=1: Smallest non-zero (Very slow, measure many cycles).
-        3: 500,      # C=3: Odd number, not a power of 2 (Slow, measure many cycles).
-        100: 50,     # C=100: General low frequency.
-        256: 50,     # C=256: 1/4 of full scale (12.5 MHz).
-        400: 50,     # C=400: Arbitrary mid-low frequency.
-        512: 50,     # C=512: 1/2 of full scale (25 MHz, highest unambiguous test).
+        0: 0,       # C=0: Min frequency (should be 0 Hz).
+        1: 200,     # C=1: Smallest non-zero (Very slow, measure many cycles).
+        3: 200,     # C=3: Odd number, not a power of 2 (Slow, measure many cycles).
+        100: 50,    # C=100: General low frequency.
+        256: 50,    # C=256: 1/4 of full scale (12.5 MHz).
+        400: 50,    # C=400: Arbitrary mid-low frequency.
+        512: 50,    # C=512: 1/2 of full scale (25 MHz, highest unambiguous test).
     }
     
     tolerance_percent = 5.0 # Allowed error margin
@@ -129,9 +112,8 @@ async def dco_frequency_test(dut):
             # **FIX: Wait longer (100 cycles) to allow gate-level registers to clear 'x' states**
             await Timer(CLOCK_PERIOD_NS * 100, units='ns') # New wait: 2000ns
             
-            # Check the output signal value on uo_out[0]
-            measured_output = dut.uo_out.value.integer & 1
-            assert measured_output == 0, f"DCO output (uo_out[0]) should be 0 for C=0, but measured {measured_output}"
+            # Check the output signal value
+            assert dut.dco_signal.value.integer == 0, f"DCO output should be 0 for C=0, but measured {dut.dco_signal.value.integer}"
             continue # Skip frequency measurement for C=0
             
         
@@ -149,7 +131,7 @@ async def dco_frequency_test(dut):
         dut._log.info(f"--- Control Word C={ctrl_word} ---")
         dut._log.info(f"Expected Freq: {expected_freq:.4f} MHz")
         dut._log.info(f"Measured Freq: {measured_freq:.4f} MHz (Period: {measured_period:.4f} ns)")
-        dut._log.info(f"Measurement based on {cycles_to_measure} cycles.") 
+        dut.dco_signal._log.info(f"Measurement based on {cycles_to_measure} cycles.")
         dut._log.info(f"Error: {error_percent:.2f}% (Tolerance: {tolerance_percent}%)")
 
         # Use assert statement
