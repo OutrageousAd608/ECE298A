@@ -108,9 +108,7 @@ async def dco_frequency_test(dut):
             dut.ui_in.value = 0
             dut.uio_in.value = 0
             await RisingEdge(dut.clk)
-            
-            # **FIX: Wait longer (100 cycles) to allow gate-level registers to clear 'x' states**
-            await Timer(CLOCK_PERIOD_NS * 100, units='ns') # New wait: 2000ns
+            await Timer(CLOCK_PERIOD_NS * 10, units='ns')
             
             # Check the output signal value
             assert dut.dco_signal.value.integer == 0, f"DCO output should be 0 for C=0, but measured {dut.dco_signal.value.integer}"
