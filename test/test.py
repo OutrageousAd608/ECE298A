@@ -111,7 +111,10 @@ async def dco_frequency_test(dut):
             await Timer(CLOCK_PERIOD_NS * 10, units='ns')
             
             # Check the output signal value
-            assert int(dut.dco_signal.value.integer) == 0, f"DCO output should be 0 for C=0, but measured {dut.dco_signal.value.integer}"
+            val = dut.dco_signal.value
+            ival = int(val)
+            assert ival == 0, f"DCO output should be 0 for C=0, but measured {ival}"
+
             continue # Skip frequency measurement for C=0
             
         
