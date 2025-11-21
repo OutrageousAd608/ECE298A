@@ -13,8 +13,6 @@ WAVES = 1
 # ---------------------------------------------------------------------
 PROJECT_SOURCES = \
 	tt_um_richad.v \
-	dco.v \
-	loop_filter.v \
 	phase_detector.v
 
 ifneq ($(GATES),yes)
