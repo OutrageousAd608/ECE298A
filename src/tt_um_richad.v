@@ -1,4 +1,6 @@
+/* verilator lint_off TIMESCALEMOD */
 `timescale 1ns/1ps
+/* verilator lint_on TIMESCALEMOD */
 
 module tt_um_richad (
     input  wire       clk,

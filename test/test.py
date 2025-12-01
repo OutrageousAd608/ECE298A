@@ -1,6 +1,6 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import RisingEdge, Timer, FallingEdge
 import random
 
 SYSCLK_NS = 20  # 50 MHz
@@ -30,7 +30,12 @@ async def reset_and_start_clock(dut):
     dut.ena.value = 1
     dut.rst_n.value = 0
     dut.ui_in.value = 0
+    
+    # Wait a bit, then synchronize to the FALLING edge to prevent 
+    # recovery time violations during GLS (X-propagation)
     await Timer(200, units="ns")
+    await FallingEdge(dut.clk) 
+    
     dut.rst_n.value = 1
     for _ in range(10): await RisingEdge(dut.clk)
 
@@ -73,6 +78,8 @@ async def test_basic_lock(dut):
 async def test_jitter_lock(dut):
     cocotb.log.info("TEST: True Lock with Jitter")
     await reset_and_start_clock(dut)
+    # Note: High jitter in GLS might cause setup violations on the async boundary.
+    # If this fails in GLS, consider reducing jitter_ps or ignoring this specific test case.
     cocotb.start_soon(drive_ref(dut, 1_000_000, jitter_ps=2000))
     locked = await wait_for_lock(dut, 4000)
     
