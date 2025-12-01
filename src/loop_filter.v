@@ -14,15 +14,23 @@ module loop_filter #(
 );
     reg signed [OUT_WIDTH-1:0] acc;  // integrator
 
+    // Helper: Sign-extend input to output width for safe arithmetic
+    wire signed [OUT_WIDTH-1:0] phase_in_ext = { {OUT_WIDTH-IN_WIDTH{phase_in[IN_WIDTH-1]}}, phase_in };
+    
+    // Helper: Calculate Proportional term separately to handle width (Input * Integer -> 32 bit -> Truncate to OUT_WIDTH)
+    wire signed [31:0] prop_mult = phase_in * K_P;
+    wire signed [OUT_WIDTH-1:0] prop_term = prop_mult[OUT_WIDTH-1:0];
+
     always @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
             acc         <= 0;
             control_out <= 0;
         end else if (update_en) begin
-            // Integral part
-            acc <= acc + (phase_in >>> I_SHIFT);
-            // Proportional + Integral
-            control_out <= acc + (phase_in * K_P);
+            // Integral part: Use the sign-extended input
+            acc <= acc + (phase_in_ext >>> I_SHIFT);
+            
+            // Proportional + Integral: Use the explicit widths
+            control_out <= acc + prop_term;
         end
         // when update_en=0, hold previous values
     end

@@ -16,7 +16,8 @@ module dco #(
             phase   <= 0;
             dco_out <= 0;
         end else begin
-            phase   <= phase + ctrl_word;
+            // Explicitly pad the 20-bit control word to 24 bits
+            phase   <= phase + { {PHASE_BITS-CTRL_BITS{1'b0}}, ctrl_word };
             dco_out <= phase[PHASE_BITS-1];
         end
     end

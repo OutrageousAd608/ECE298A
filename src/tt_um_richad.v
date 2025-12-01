@@ -1,7 +1,6 @@
-/* verilator lint_off TIMESCALEMOD */
 `timescale 1ns/1ps
-/* verilator lint_on TIMESCALEMOD */
 
+/* verilator lint_off TIMESCALEMOD */
 module tt_um_richad (
     input  wire       clk,
     input  wire       ena,
@@ -12,7 +11,7 @@ module tt_um_richad (
     output wire [7:0] uio_out,
     output wire [7:0] uio_oe
 );
-
+    
     wire ref_signal = ui_in[0];
     wire dco_signal;
 
@@ -38,7 +37,7 @@ module tt_um_richad (
     // Loop Filter
     // ---------------------------------------------------------
     wire signed [23:0] lf_out;
-
+    
     loop_filter #(
         .IN_WIDTH (16),
         .OUT_WIDTH(24),
@@ -57,10 +56,13 @@ module tt_um_richad (
     // ---------------------------------------------------------
     localparam integer CTRL_BITS   = 20;
     localparam integer PHASE_BITS  = 24;
-    localparam integer DCO_BASE    = 335544; 
+    // Explicitly size the constant to match the addition width (21 bits: 20 bits + sign)
+    localparam signed [CTRL_BITS:0] DCO_BASE = 21'sd335544;
 
     wire signed [CTRL_BITS:0] ctrl_delta = lf_out[23 -: (CTRL_BITS+1)];
-    wire signed [CTRL_BITS:0] dco_sum = $signed(DCO_BASE) + ctrl_delta;
+    
+    // Both operands are now 21 bits
+    wire signed [CTRL_BITS:0] dco_sum = DCO_BASE + ctrl_delta;
 
     wire [CTRL_BITS-1:0] dco_ctrl =
         (dco_sum < 0)                        ? {CTRL_BITS{1'b0}} :
@@ -80,13 +82,13 @@ module tt_um_richad (
     // ---------------------------------------------------------
     // TRUE LOCK DETECTOR (Leaky Bucket)
     // ---------------------------------------------------------
-    
     reg [10:0] lock_bucket;
     reg        lock_reg;
 
-    localparam integer BUCKET_MAX  = 2000;
-    localparam integer LOCK_THRESH = 1500; 
-    localparam integer UNLOCK_THRESH = 1000;
+    // Explicitly size constants to match the 11-bit bucket
+    localparam [10:0] BUCKET_MAX    = 11'd2000;
+    localparam [10:0] LOCK_THRESH   = 11'd1500;
+    localparam [10:0] UNLOCK_THRESH = 11'd1000;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -96,13 +98,11 @@ module tt_um_richad (
             if (!edge_valid) begin
                 // No Error: Fill bucket (+1)
                 if (lock_bucket < BUCKET_MAX)
-                    lock_bucket <= lock_bucket + 1;
+                    lock_bucket <= lock_bucket + 1'b1;
             end else begin
                 // Error Detected: Drain bucket (-4)
-                // CHANGED: Reduced penalty from 8 to 4.
-                // This prevents steady-state dithering (hunting) from breaking the lock.
-                if (lock_bucket >= 4)
-                    lock_bucket <= lock_bucket - 4;
+                if (lock_bucket >= 11'd4)
+                    lock_bucket <= lock_bucket - 11'd4;
                 else
                     lock_bucket <= 0;
             end
@@ -118,5 +118,8 @@ module tt_um_richad (
     assign uo_out = {6'b0, dco_signal, lock_reg};
     assign uio_out = 8'b0;
     assign uio_oe  = 8'b0;
+
+    // MOVED: Keep this at the end so all signals are defined before use
+    wire _unused = &{ui_in[7:1], uio_in, lf_out[2:0]};
 
 endmodule
