@@ -1,66 +1,37 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, FallingEdge, Timer
+from cocotb.triggers import RisingEdge, Timer
 import random
 
 SYSCLK_NS = 20  # 50 MHz
 
 # ----------------------------------------------------------------------
-# Helper: Safe integer conversion
+# Helpers
 # ----------------------------------------------------------------------
 def safe_int(sig):
-    """Safely convert signal to int, treating X/Z as 0."""
     try:
         return int(sig.value)
     except ValueError:
         return 0
 
-# ----------------------------------------------------------------------
-# Helper: Cycle-Aligned Reference Driver
-# ----------------------------------------------------------------------
-async def drive_ref_cycles(dut, high_cycles, low_cycles, jitter_mode=False):
-    """
-    Drives ref_in aligned to FallingEdge to avoid GLS X-propagation.
-    
-    high_cycles: Number of CLK cycles ref is HIGH
-    low_cycles:  Number of CLK cycles ref is LOW
-    """
+async def drive_ref(dut, freq_hz, jitter_ps=0):
+    period_ps = int(1_000_000_000_000 // freq_hz)
+    half_ps = period_ps // 2
+    ref_val = 0
     while True:
-        # Drive HIGH
-        curr_val = safe_int(dut.ui_in.value)
-        dut.ui_in.value = curr_val | 1
-        
-        for _ in range(high_cycles):
-            await FallingEdge(dut.clk)
-            
-        # Drive LOW
-        curr_val = safe_int(dut.ui_in.value)
-        dut.ui_in.value = curr_val & ~1
-        
-        # Simple Jitter Injection (skips or adds a wait cycle randomly)
-        if jitter_mode and random.randint(0, 10) > 8:
-            if random.choice([True, False]):
-                await FallingEdge(dut.clk) # Add extra delay
-        
-        for _ in range(low_cycles):
-            await FallingEdge(dut.clk)
+        ref_val = 1 if ref_val == 0 else 0
+        dut.ui_in.value = ref_val
+        jitter = random.randint(-jitter_ps, jitter_ps) if jitter_ps else 0
+        delay_ps = max(1, half_ps + jitter)
+        await Timer(delay_ps, units="ps")
 
-# ----------------------------------------------------------------------
-# Reset Routine
-# ----------------------------------------------------------------------
 async def reset_and_start_clock(dut):
     cocotb.start_soon(Clock(dut.clk, SYSCLK_NS, units="ns").start())
-    
     dut.ena.value = 1
     dut.rst_n.value = 0
     dut.ui_in.value = 0
-    
     await Timer(200, units="ns")
-    
-    # CRITICAL: Release reset on FallingEdge to prevent Setup violation X's
-    await FallingEdge(dut.clk)
     dut.rst_n.value = 1
-    
     for _ in range(10): await RisingEdge(dut.clk)
 
 async def wait_for_lock(dut, timeout_us):
@@ -77,12 +48,9 @@ async def wait_for_lock(dut, timeout_us):
 
 @cocotb.test()
 async def test_lock_observation(dut):
-    cocotb.log.info("TEST: Observation")
+    cocotb.log.info("TEST: Observation (True Phase Lock)")
     await reset_and_start_clock(dut)
-    
-    # 1 MHz = 50 cycles (25 High, 25 Low)
-    cocotb.start_soon(drive_ref_cycles(dut, 25, 25))
-    
+    cocotb.start_soon(drive_ref(dut, freq_hz=1_000_000))
     await Timer(500, units="us")
     cocotb.log.info("Finished Observation")
 
@@ -90,12 +58,10 @@ async def test_lock_observation(dut):
 async def test_basic_lock(dut):
     cocotb.log.info("TEST: Basic Phase Lock at 1 MHz")
     await reset_and_start_clock(dut)
+    cocotb.start_soon(drive_ref(dut, 1_000_000))
     
-    # 1 MHz = 50 cycles (25 High, 25 Low)
-    cocotb.start_soon(drive_ref_cycles(dut, 25, 25))
-    
-    # Increased timeout for GLS settling
-    locked = await wait_for_lock(dut, 5000) 
+    # "True Lock" takes longer to fill the bucket.
+    locked = await wait_for_lock(dut, 3000) 
     assert locked, "ADPLL failed to achieve True Phase Lock"
     cocotb.log.info("PASS: Phase Locked")
 
@@ -103,45 +69,47 @@ async def test_basic_lock(dut):
 async def test_jitter_lock(dut):
     cocotb.log.info("TEST: True Lock with Jitter")
     await reset_and_start_clock(dut)
-    
-    # 1 MHz with occasional cycle skips (Jitter)
-    cocotb.start_soon(drive_ref_cycles(dut, 25, 25, jitter_mode=True))
-    
-    locked = await wait_for_lock(dut, 6000)
+    cocotb.start_soon(drive_ref(dut, 1_000_000, jitter_ps=2000))
+    locked = await wait_for_lock(dut, 4000)
     assert locked, "ADPLL failed to lock with jitter"
     cocotb.log.info("PASS: Locked despite jitter")
 
 @cocotb.test()
 async def test_freq_step(dut):
-    cocotb.log.info("TEST: Frequency Step (Integer Divisors)")
+    cocotb.log.info("TEST: Frequency Step (The Creep & Re-Lock)")
     await reset_and_start_clock(dut)
 
-    # 1. Lock to 1 MHz (50 cycles: 25H/25L)
-    ref_task = cocotb.start_soon(drive_ref_cycles(dut, 25, 25))
-    await wait_for_lock(dut, 5000)
-    
-    cocotb.log.info("STEP: Changing to 1.25 MHz (Integer Safe)")
+    # 1. Lock to 0.9 MHz
+    ref_task = cocotb.start_soon(drive_ref(dut, 900_000))
+    await wait_for_lock(dut, 3000)
+
+    # 2. Step to 1.1 MHz
+    cocotb.log.info("STEP: Changing to 1.1 MHz")
     ref_task.kill()
-    
-    # Clear input
-    dut.ui_in.value = safe_int(dut.ui_in.value) & ~1
-    
-    # 2. Step to 1.25 MHz
-    # 50 MHz / 1.25 MHz = 40 cycles (20 High, 20 Low)
-    # This prevents X-propagation by staying grid-aligned
-    ref_task = cocotb.start_soon(drive_ref_cycles(dut, 20, 20))
+    dut.ui_in.value = 0
+    ref_task = cocotb.start_soon(drive_ref(dut, 1_100_000))
 
     # Check that lock drops
-    await Timer(200, units="us") 
+    await Timer(50, units="us") 
     is_locked_early = safe_int(dut.uo_out.value) & 0x1
     if is_locked_early == 0:
-         cocotb.log.info("PASS: Lock correctly dropped.")
+         cocotb.log.info("PASS: Lock correctly dropped during frequency change.")
+    else:
+         cocotb.log.warning("WARNING: Lock bit didn't drop immediately (Bucket possibly draining)")
 
-    # 3. Wait for Re-lock
-    await Timer(7000, units="us")
+    # 3. Wait for Creep + Bucket Fill
+    # TUNED: Increased to 6000us (6ms).
+    # Physics Creep: ~1ms
+    # Bucket Fill: ~1.5ms minimum
+    # Safety Margin: ~3.5ms
+    await Timer(6000, units="us")
 
     # 4. Final Verification
     is_locked = safe_int(dut.uo_out.value) & 0x1
+    
+    # Debugging output to see what the final state is
     cocotb.log.info(f"Final Lock State: {is_locked}")
     
     assert is_locked, "Lock bit should be high at steady state"
+    
+    cocotb.log.info("PASS: System re-locked to new phase.")
