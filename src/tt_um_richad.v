@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module tt_um_richad (
-    input  wire       clk,       // 50 MHz system clock
+    input  wire       clk,
     input  wire       ena,
     input  wire       rst_n,
     input  wire [7:0] ui_in,
@@ -11,17 +11,18 @@ module tt_um_richad (
     output wire [7:0] uio_oe
 );
 
-    // Reference comes in on bit 0
     wire ref_signal = ui_in[0];
     wire dco_signal;
 
-    // Phase detector outputs
     wire signed [15:0] phase_err;
     wire               edge_valid;
 
+    // ---------------------------------------------------------
+    // Phase-Frequency Detector
+    // ---------------------------------------------------------
     phase_detector #(
         .OUT_WIDTH(16),
-        .ERR_STEP(16'sd1)
+        .ERR_STEP(16'sd256)
     ) u_pd (
         .clk        (clk),
         .reset_n    (rst_n),
@@ -31,14 +32,16 @@ module tt_um_richad (
         .edge_valid (edge_valid)
     );
 
-    // Loop filter
+    // ---------------------------------------------------------
+    // Loop Filter
+    // ---------------------------------------------------------
     wire signed [23:0] lf_out;
 
     loop_filter #(
         .IN_WIDTH (16),
         .OUT_WIDTH(24),
         .K_P      (4),
-        .I_SHIFT  (4)
+        .I_SHIFT  (3)
     ) u_lf (
         .clk         (clk),
         .reset_n     (rst_n),
@@ -48,28 +51,20 @@ module tt_um_richad (
     );
 
     // ---------------------------------------------------------
-    // DCO control mapping (this is already working)
+    // DCO Control
     // ---------------------------------------------------------
     localparam integer CTRL_BITS   = 20;
     localparam integer PHASE_BITS  = 24;
-    localparam integer DCO_BASE    = 335544; // about 1 MHz increment
+    localparam integer DCO_BASE    = 335544; 
 
-    // Take UPPER bits of loop filter output as signed delta
-    // (bits [23:3] → 21 bits total for CTRL_BITS=20)
-    wire signed [CTRL_BITS:0] ctrl_delta =
-        lf_out[23 -: (CTRL_BITS+1)];
+    wire signed [CTRL_BITS:0] ctrl_delta = lf_out[23 -: (CTRL_BITS+1)];
+    wire signed [CTRL_BITS:0] dco_sum = $signed(DCO_BASE) + ctrl_delta;
 
-    // Signed sum: base + correction
-    wire signed [CTRL_BITS:0] dco_sum =
-        $signed(DCO_BASE) + ctrl_delta;
-
-    // Saturate into 0 .. (2^CTRL_BITS - 1)
     wire [CTRL_BITS-1:0] dco_ctrl =
         (dco_sum < 0)                        ? {CTRL_BITS{1'b0}} :
         (dco_sum > ((1<<CTRL_BITS)-1))       ? {CTRL_BITS{1'b1}} :
                                                dco_sum[CTRL_BITS-1:0];
 
-    // DCO instance
     dco #(
         .CTRL_BITS (CTRL_BITS),
         .PHASE_BITS(PHASE_BITS)
@@ -81,43 +76,44 @@ module tt_um_richad (
     );
 
     // ---------------------------------------------------------
-    // NEW lock detector: based on dco_ctrl staying near DCO_BASE
+    // TRUE LOCK DETECTOR (Leaky Bucket)
     // ---------------------------------------------------------
-    localparam [CTRL_BITS-1:0] LOCK_WIN    = 20'd64;   // +/- 64 around base
-    localparam integer         LOCK_COUNT  = 64;       // edges needed for lock
+    
+    reg [10:0] lock_bucket;
+    reg        lock_reg;
 
-    wire [CTRL_BITS-1:0] lower_bound = DCO_BASE - LOCK_WIN;
-    wire [CTRL_BITS-1:0] upper_bound = DCO_BASE + LOCK_WIN;
-    wire                 in_window   = (dco_ctrl >= lower_bound) &&
-                                       (dco_ctrl <= upper_bound);
-
-    reg [7:0] lock_cnt;
-    reg       lock_reg;
+    localparam integer BUCKET_MAX  = 2000;
+    localparam integer LOCK_THRESH = 1500; 
+    localparam integer UNLOCK_THRESH = 1000;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            lock_cnt <= 8'd0;
-            lock_reg <= 1'b0;
-        end else if (edge_valid & ena) begin
-            // integrate "good" edges vs "bad"
-            if (in_window) begin
-                if (lock_cnt != 8'hFF)
-                    lock_cnt <= lock_cnt + 8'd1;
+            lock_bucket <= 0;
+            lock_reg    <= 0;
+        end else if (ena) begin
+            if (!edge_valid) begin
+                // No Error: Fill bucket (+1)
+                if (lock_bucket < BUCKET_MAX)
+                    lock_bucket <= lock_bucket + 1;
             end else begin
-                if (lock_cnt != 8'd0)
-                    lock_cnt <= lock_cnt - 8'd1;
+                // Error Detected: Drain bucket (-4)
+                // CHANGED: Reduced penalty from 8 to 4.
+                // This prevents steady-state dithering (hunting) from breaking the lock.
+                if (lock_bucket >= 4)
+                    lock_bucket <= lock_bucket - 4;
+                else
+                    lock_bucket <= 0;
             end
 
-            lock_reg <= (lock_cnt >= LOCK_COUNT);
+            // Schmitt Trigger
+            if (lock_bucket > LOCK_THRESH)
+                lock_reg <= 1'b1;
+            else if (lock_bucket < UNLOCK_THRESH)
+                lock_reg <= 1'b0;
         end
     end
 
-    // ---------------------------------------------------------
-    // Outputs
-    // ---------------------------------------------------------
-    // uo_out[0] = locked, uo_out[1] = dco
     assign uo_out = {6'b0, dco_signal, lock_reg};
-
     assign uio_out = 8'b0;
     assign uio_oe  = 8'b0;
 
