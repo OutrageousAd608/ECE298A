@@ -8,7 +8,7 @@ jobs:
   gds:
     runs-on: ubuntu-24.04
     env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
     needs: gds
     runs-on: ubuntu-24.04
     env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Run Tiny Tapeout Precheck
         uses: TinyTapeout/tt-gds-action/precheck@ttsky25a
@@ -37,7 +37,7 @@ jobs:
     needs: gds
     runs-on: ubuntu-24.04
     env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
